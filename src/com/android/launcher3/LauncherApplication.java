@@ -21,6 +21,7 @@ import com.android.launcher3.dagger.DaggerLauncherAppComponent;
 import com.android.launcher3.dagger.LauncherAppComponent;
 import com.android.launcher3.dagger.LauncherBaseAppComponent;
 import com.android.launcher3.dagger.LauncherComponentProvider;
+import com.android.launcher3.icons.ThemedIconBackdrop;
 import com.android.launcher3.util.TraceHelper;
 
 /**
@@ -33,6 +34,9 @@ public class LauncherApplication extends Application {
     public void onCreate() {
         super.onCreate();
         LauncherComponentProvider.get(this).getMainProcessInitializer().init(this);
+        // Prepares the blurred wallpaper used as the themed icon background. Does its work on a
+        // background thread and no-ops entirely while the feature is switched off.
+        ThemedIconBackdrop.init(this);
     }
 
     public LauncherAppComponent getAppComponent() {

@@ -111,6 +111,12 @@ public class DoubleShadowBubbleTextView extends BubbleTextView {
             super.onDraw(canvas);
             return;
         }
+        // The double-shadow path below draws through drawWithoutDot(), which reaches
+        // TextView.onDraw() directly and never runs BubbleTextView.onDraw(). The themed icon
+        // backdrop lives there, so it has to be drawn explicitly here or icons with visible
+        // labels silently lose it -- which is exactly why the hotseat (labels hidden, so it
+        // takes the branch above) blurred while the workspace did not.
+        drawThemedIconBackdrop(canvas);
         int alpha = Color.alpha(getCurrentTextColor());
 
         // We enhance the shadow by drawing the shadow twice

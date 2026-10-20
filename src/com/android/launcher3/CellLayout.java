@@ -68,6 +68,7 @@ import com.android.launcher3.celllayout.ReorderPreviewAnimation;
 import com.android.launcher3.config.FeatureFlags;
 import com.android.launcher3.dragndrop.DraggableView;
 import com.android.launcher3.folder.PreviewBackground;
+import com.android.launcher3.icons.ThemedIconBackdrop;
 import com.android.launcher3.model.data.ItemInfo;
 import com.android.launcher3.model.data.LauncherAppWidgetInfo;
 import com.android.launcher3.util.CellAndSpan;
@@ -373,6 +374,13 @@ public class CellLayout extends ViewGroup {
     }
 
     public void enableHardwareLayer(boolean hasLayer) {
+        // Workspace only enables these layers while switching state or mid page transition. A
+        // hardware layer renders the icons into an offscreen texture, so the PorterDuff.SRC hole
+        // the themed icon backdrop punches would land in that texture rather than in the window,
+        // and icons would lose their blur for the duration of every page swipe.
+        if (hasLayer && ThemedIconBackdrop.isEnabled()) {
+            hasLayer = false;
+        }
         mShortcutsAndWidgets.setLayerType(hasLayer ? LAYER_TYPE_HARDWARE : LAYER_TYPE_NONE, sPaint);
     }
 

@@ -608,4 +608,13 @@
     <!-- App Title Pill -->
     <dimen name="app_title_pill_horizontal_padding">4dp</dimen>
     <dimen name="app_title_pill_round_rect_padding">2dp</dimen>
+
+    <!-- Blur radius for the themed icon backdrop. Handed to SurfaceFlinger, which caches the
+         blur by radius, so every icon sharing this value costs a single blur pass.
+
+         Deliberately in px, not dp, and deliberately 23: this mirrors SystemUI's
+         max_window_blur_radius, the ceiling it uses for the notification shade and QS tiles, so
+         the icons read as the same material as the rest of the system blur. Window blur is a
+         pixel-domain effect, so SystemUI specifies it in px and so do we. -->
+    <dimen name="themed_icon_blur_radius">23px</dimen>
 </resources>

@@ -69,6 +69,7 @@ import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewRootImpl;
 import android.view.ViewDebug;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.TextView;
@@ -88,11 +89,13 @@ import com.android.launcher3.folder.FolderIcon;
 import com.android.launcher3.graphics.PreloadIconDelegate;
 import com.android.launcher3.graphics.ThemeManager;
 import com.android.launcher3.icons.BitmapInfo.DrawableCreationFlags;
+import com.android.internal.graphics.drawable.BackgroundBlurDrawable;
 import com.android.launcher3.icons.DotRenderer;
 import com.android.launcher3.icons.DotRenderer.IconShapeInfo;
 import com.android.launcher3.icons.FastBitmapDrawable;
 import com.android.launcher3.icons.IconCache.ItemInfoUpdateReceiver;
 import com.android.launcher3.icons.PlaceHolderDrawableDelegate;
+import com.android.launcher3.icons.ThemedIconBackdrop;
 import com.android.launcher3.icons.cache.CacheLookupFlag;
 import com.android.launcher3.model.data.AppInfo;
 import com.android.launcher3.model.data.ItemInfo;
@@ -181,6 +184,10 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
     private final MultiTranslateDelegate mTranslateDelegate = new MultiTranslateDelegate(this);
     protected final ActivityContext mActivity;
     private FastBitmapDrawable mIcon;
+    /** Scratch bounds for the themed icon blur region; reused to stay allocation-free. */
+    private static final int THEMED_ICON_BACKDROP_SCRIM_ALPHA = 140; // ~55%
+    private final Rect mBackdropIconBounds = new Rect();
+    private BackgroundBlurDrawable mIconBlurDrawable;
     private DeviceProfile mDeviceProfile;
     private boolean mCenterVertically;
 
@@ -850,9 +857,91 @@ public class BubbleTextView extends TextView implements ItemInfoUpdateReceiver,
 
     @Override
     public void onDraw(Canvas canvas) {
+        drawThemedIconBackdrop(canvas);
         super.onDraw(canvas);
         drawDotIfNecessary(canvas);
         drawRunningAppIndicatorIfNecessary(canvas);
+    }
+
+    /**
+     * True when this icon should sit on a blurred backdrop rather than a flat themed colour.
+     *
+     * Workspace only, which also covers the hotseat. The all-apps drawer, folders and shortcut
+     * popups all draw their own opaque panel, and a blur region there would sample the wallpaper
+     * behind the whole window rather than the panel the icon actually sits on -- so it would be
+     * both wrong and invisible.
+     */
+    public boolean hasThemedIconBackdrop() {
+        return mDisplay == DISPLAY_WORKSPACE
+                && mIcon != null
+                && mIcon.isThemed()
+                && ThemedIconBackdrop.isEnabled();
+    }
+
+    /**
+     * Punches a blur region out of the launcher window behind this icon.
+     *
+     * {@link BackgroundBlurDrawable} paints with PorterDuff SRC, so it replaces the window's
+     * pixels in the icon's footprint with a translucent colour and registers the same footprint
+     * with SurfaceFlinger. SurfaceFlinger then blurs whatever is actually behind the window --
+     * the wallpaper, live or not -- and composites it under the hole. The drawable tracks its own
+     * position through a RenderNode listener, so scrolling and wallpaper parallax need no help
+     * from us.
+     *
+     * Must run before the icon itself is drawn: the hole has to exist before the glyph is painted
+     * on top of it.
+     */
+    protected void drawThemedIconBackdrop(Canvas canvas) {
+        if (mIcon != null) {
+            // Cleared up front so every early return below leaves the icon drawing its normal
+            // flat themed fill. Only the success path at the end turns it on.
+            mIcon.backdropActive = false;
+        }
+        // Drag previews can draw this view into a software bitmap canvas, which cannot draw the
+        // RenderNode owned by BackgroundBlurDrawable. Keep the normal flat themed fill there.
+        if (!canvas.isHardwareAccelerated()) {
+            return;
+        }
+        if (!hasThemedIconBackdrop()) {
+            if (mIconBlurDrawable != null) {
+                mIconBlurDrawable.setVisible(false, false);
+            }
+            return;
+        }
+        if (mIconBlurDrawable == null) {
+            ViewRootImpl viewRoot = getViewRootImpl();
+            if (viewRoot == null) {
+                // Not attached yet; the flat themed colour is drawn this frame instead.
+                return;
+            }
+            mIconBlurDrawable = viewRoot.createBackgroundBlurDrawable();
+            if (mIconBlurDrawable == null) {
+                // Cross-window blur is unavailable (battery saver, or the platform does not
+                // support it). Leave it null so the flat colour keeps being used.
+                return;
+            }
+            mIconBlurDrawable.setBlurRadius(getResources()
+                    .getDimensionPixelSize(R.dimen.themed_icon_blur_radius));
+        }
+        getIconBounds(mBackdropIconBounds);
+        if (mBackdropIconBounds.isEmpty()) {
+            return;
+        }
+        mIconBlurDrawable.setVisible(true, false);
+        mIconBlurDrawable.setBounds(mBackdropIconBounds);
+        // Icon shapes are circles here, so a uniform radius of half the width is exact. Blur
+        // regions are rounded rectangles, so a non-circular icon shape would bleed at the edges.
+        mIconBlurDrawable.setCornerRadius(mBackdropIconBounds.width() / 2f);
+        // Alpha-blended over the blur. This is the same colour the icon would otherwise be
+        // filled with, kept at partial alpha: the monochrome glyph is coloured for contrast
+        // against it, and over bare wallpaper it would often be unreadable.
+        int themedBg = getResources().getColor(
+                com.android.launcher3.icons.R.color.themed_icon_background_color,
+                getContext().getTheme());
+        mIconBlurDrawable.setColor((THEMED_ICON_BACKDROP_SCRIM_ALPHA << 24)
+                | (themedBg & 0x00FFFFFF));
+        mIconBlurDrawable.draw(canvas);
+        mIcon.backdropActive = true;
     }
 
     /**
