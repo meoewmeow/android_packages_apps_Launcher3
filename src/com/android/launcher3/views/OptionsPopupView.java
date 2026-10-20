@@ -312,6 +312,17 @@ public class OptionsPopupView<T extends Context & ActivityContext> extends Arrow
         String pickerPackage = launcher.getString(R.string.wallpaper_picker_package);
         if (!TextUtils.isEmpty(pickerPackage)) {
             intent.setPackage(pickerPackage);
+            // The configured picker can come from an RRO that names an app this build does not
+            // ship (Lineage's overlay names com.android.wallpaper). An intent pinned to a missing
+            // package fails silently, so the menu entry just closes. Fall back to the picker this
+            // ROM actually has, and failing that to the system chooser.
+            if (intent.resolveActivity(launcher.getPackageManager()) == null) {
+                String fallback = launcher.getString(R.string.wallpaper_picker_package_fallback);
+                intent.setPackage(TextUtils.isEmpty(fallback) ? null : fallback);
+                if (intent.resolveActivity(launcher.getPackageManager()) == null) {
+                    intent.setPackage(null);
+                }
+            }
         }
         return launcher.startActivitySafely(v, intent, placeholderInfo(intent)) != null;
     }

@@ -61,7 +61,13 @@
     <integer name="config_caretAnimationDuration">200</integer>
 
     <!-- Default packages -->
-    <string name="wallpaper_picker_package" translatable="false"></string>
+    <!-- Empty upstream, which sends ACTION_SET_WALLPAPER to a resolver chooser across every
+         handler on the device. This ROM ships the Axion theme picker as the styles/grid UI, so
+         name it directly and the "Wallpaper & style" option opens it instead of a chooser. -->
+    <string name="wallpaper_picker_package" translatable="false">com.android.axion.themepicker</string>
+    <!-- Used when wallpaper_picker_package names an app that is not installed. Deliberately a
+         separate resource: overlays replace wallpaper_picker_package, not this. -->
+    <string name="wallpaper_picker_package_fallback" translatable="false">com.android.axion.themepicker</string>
 
     <!-- Scalable Grid configuration -->
     <!-- This is a float because it is converted to dp later in DeviceProfile -->
