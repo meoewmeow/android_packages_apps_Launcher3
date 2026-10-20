@@ -33,6 +33,7 @@ import androidx.annotation.VisibleForTesting;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import androidx.preference.PreferenceFragmentCompat;
@@ -45,6 +46,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.launcher3.BuildConfig;
 import com.android.launcher3.Flags;
+import com.android.launcher3.InvariantDeviceProfile;
 import com.android.launcher3.LauncherAppState;
 import com.android.launcher3.LauncherFiles;
 import com.android.launcher3.LauncherPrefs;
@@ -223,6 +225,7 @@ public class SettingsHomescreen extends CollapsingToolbarBaseActivity
             mShowGoogleBarPref = screen.findPreference(LauncherPrefs.DOCK_SEARCH.getSharedPrefKey());
 
             updateIsGoogleAppEnabled();
+            setupGridPreference(screen);
 
             if (!VibratorWrapper.INSTANCE.get(getContext()).hasVibrator()) {
                 PreferenceCategory generalCategory = (PreferenceCategory) findPreference(KEY_GENERAL_CATEGORY);
@@ -249,6 +252,30 @@ public class SettingsHomescreen extends CollapsingToolbarBaseActivity
             if (getActivity() != null && !TextUtils.isEmpty(getPreferenceScreen().getTitle())) {
                 getActivity().setTitle(getPreferenceScreen().getTitle());
             }
+        }
+
+        /**
+         * Home screen grid picker. Applies through InvariantDeviceProfile.setCurrentGrid(),
+         * the same path the launcher's grid_control provider uses for Wallpaper & style.
+         */
+        private void setupGridPreference(PreferenceScreen screen) {
+            final ListPreference gridPref = screen.findPreference("pref_home_grid");
+            if (gridPref == null) return;
+            final InvariantDeviceProfile idp = InvariantDeviceProfile.INSTANCE.get(getContext());
+            gridPref.setValue(idp.numColumns + "_by_" + idp.numRows);
+            updateGridSummary(gridPref);
+            gridPref.setOnPreferenceChangeListener((p, newValue) -> {
+                gridPref.setValue((String) newValue);
+                updateGridSummary(gridPref);
+                InvariantDeviceProfile.INSTANCE.get(getContext()).setCurrentGrid((String) newValue);
+                return false; // applied above; the launcher stores the grid itself
+            });
+        }
+
+        private void updateGridSummary(ListPreference pref) {
+            final CharSequence entry = pref.getEntry();
+            pref.setSummary(entry == null ? null
+                    : getString(R.string.pref_home_grid_summary, entry));
         }
 
         private boolean isKeyInPreferenceGroup(String targetKey, PreferenceGroup parent) {
